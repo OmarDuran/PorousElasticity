@@ -29,7 +29,7 @@ void PostProcess(TPZAnalysis *an);
 
 int main() 
 {
-    int p_order = 1;
+    int p_order = 2;
     TPZGeoMesh * gmesh = ReadGeometry();
     PrintGeometry(gmesh);
     
@@ -47,14 +47,12 @@ int main()
         REAL norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tol;
         if (stop_criterion_Q) {
-            std::cout << "Nonlinear process converged." << std::endl;
+            std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
             break;
         }
     }
 
-
     PostProcess(analysis);
-    
     std::cout << "Execution complete." << std::endl;
     return 0;
 }
