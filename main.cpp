@@ -6,6 +6,7 @@
 #include "TPZGmshReader.h"
 #include "TPZVTKGeoMesh.h"
 #include "TPZMatElasticity2D.h"
+#include "TPorousElasticity.h"
 #include "pzbndcond.h"
 #include "pzstepsolver.h"
 #include "TPZSSpStructMatrix.h"
@@ -37,7 +38,7 @@ int main()
     TPZAnalysis * analysis = Analysis(cmesh);
     
     REAL tol = 0.01;
-    int n_it = 1;
+    int n_it = 10;
     bool stop_criterion_Q = false;
     for (int i = 0; i < n_it; i++) {
         analysis->Assemble();
@@ -97,20 +98,38 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     
     // Frist running with linear elasticity.
     unsigned int rock_id = 1;
-    TPZMatElasticity2D * rock = new TPZMatElasticity2D(rock_id);
-    REAL Ey = 29269.0*to_MPa;
-    REAL nu = 0.20300;
-    rock->SetPlaneStrain();
-    rock->SetElasticity(Ey, nu);
-    
+//    TPZMatElasticity2D * rock = new TPZMatElasticity2D(rock_id);
+//    REAL Ey = 29269.0*to_MPa;
+//    REAL nu = 0.20300;
+//    rock->SetPlaneStrain();
+//    rock->SetElasticity(Ey, nu);
 
+    TPorousElasticity * rock = new TPorousElasticity(rock_id);
+    
+    STATE nu = 0.203;
+    STATE kappa = 0.0024;
+    STATE pt_el = 5.835;
+    STATE e_0 = 0.34;
+    STATE p_0 = 0.0;
+    TPZManVector<STATE,6> s_0(6);
+    
+    rock->SetPlaneStrain();
+    rock->SetPorousElasticity(kappa, pt_el, e_0, p_0);
+    rock->SetPoissonRatioConstant(nu);
+    rock->SetInitialStress(s_0);
+    
+    TPZTensor<STATE> epsilon, sigma;
+    rock->Sigma(epsilon, sigma);
+
+    sigma.Print(std::cout);
+    
     unsigned int bc_i_id, bc_e_id, bc_index, bc_id;
     
     bc_i_id = 2;
     bc_index = 5;
     TPZFMatrix<STATE> val1(2,2,0.), val2(2,1,0.);
     
-    val2(0,0) = -10.0*to_MPa;
+    val2(0,0) = 10.0*to_MPa;
     TPZBndCond * bc_i = rock->CreateBC(rock, bc_i_id, bc_index, val1, val2);
     
     bc_e_id = 3;
