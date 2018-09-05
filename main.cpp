@@ -10,8 +10,8 @@
 #include "pzstepsolver.h"
 #include "TPZSSpStructMatrix.h"
 #include "pzskylstrmatrix.h"
-//#include "pzanalysis.h"
-#include "pznonlinanalysis.h"
+#include "pzanalysis.h"
+//#include "pznonlinanalysis.h"
 
 
 
@@ -21,10 +21,10 @@ void PrintGeometry(TPZGeoMesh * gmesh);
 
 // Computational utilities
 TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order);
-TPZNonLinearAnalysis * NonlinearAnalysis(TPZCompMesh * cmesh);
+TPZAnalysis * Analysis(TPZCompMesh * cmesh);
 
 // Post-process utilities
-void PostProcess(TPZNonLinearAnalysis *an);
+void PostProcess(TPZAnalysis *an);
 
 
 int main() 
@@ -34,21 +34,24 @@ int main()
     PrintGeometry(gmesh);
     
     TPZCompMesh * cmesh = DeformationMesh(gmesh, p_order);
-    TPZNonLinearAnalysis * analysis = NonlinearAnalysis(cmesh);
+    TPZAnalysis * analysis = Analysis(cmesh);
     
-    std::ofstream convergence("convergence.txt");
     REAL tol = 0.01;
-    int numiter = 1;
-    analysis->Assemble();
-//    analysis->Solver().Matrix()->Print("j = ",std::cout,EMathematicaInput);
-    analysis->Rhs() *= 1.0;
-    analysis->Rhs().Print("r = ",std::cout,EMathematicaInput);
-    analysis->Solve();
-    analysis->Solution().Print("dx = ",std::cout,EMathematicaInput);
-    analysis->AssembleResidual();
-    analysis->Rhs().Print("rn = ",std::cout,EMathematicaInput);
-    REAL norm_res = Norm(analysis->Rhs());
-//    analysis->IterativeProcess(convergence, tol, numiter);
+    int n_it = 1;
+    bool stop_criterion_Q = false;
+    for (int i = 0; i < n_it; i++) {
+        analysis->Assemble();
+        analysis->Rhs() *= -1.0;
+        analysis->Solve();
+        analysis->AssembleResidual();
+        REAL norm_res = Norm(analysis->Rhs());
+        stop_criterion_Q = norm_res < tol;
+        if (stop_criterion_Q) {
+            std::cout << "Nonlinear process converged." << std::endl;
+            break;
+        }
+    }
+
 
     PostProcess(analysis);
     
@@ -144,10 +147,10 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     return cmesh;
 }
 
-TPZNonLinearAnalysis * NonlinearAnalysis(TPZCompMesh * cmesh){
+TPZAnalysis * Analysis(TPZCompMesh * cmesh){
     
     int numofThreads = 0;
-    TPZNonLinearAnalysis * analysis = new TPZNonLinearAnalysis(cmesh,std::cout);
+    TPZAnalysis * analysis = new TPZAnalysis(cmesh,true);
     TPZSkylineStructMatrix matrix(cmesh);
 //    TPZSymetricSpStructMatrix matrix(cmesh);
     TPZStepSolver<STATE> step;
@@ -158,7 +161,7 @@ TPZNonLinearAnalysis * NonlinearAnalysis(TPZCompMesh * cmesh){
     return analysis;
 }
 
-void PostProcess(TPZNonLinearAnalysis *an)
+void PostProcess(TPZAnalysis *an)
 {
     const int dim = an->Mesh()->Dimension();
     int div = 0;
