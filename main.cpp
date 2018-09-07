@@ -30,27 +30,38 @@ void PostProcess(TPZAnalysis *an);
 
 int main() 
 {
-    int p_order = 2;
+    int p_order = 1;
     TPZGeoMesh * gmesh = ReadGeometry();
     PrintGeometry(gmesh);
     
     TPZCompMesh * cmesh = DeformationMesh(gmesh, p_order);
     TPZAnalysis * analysis = Analysis(cmesh);
     
-    REAL tol = 0.01;
-    int n_it = 10;
+    TPZFMatrix<STATE> x(analysis->Solution()), dx;
+    x.Zero();
+    REAL tol = 1.0e-6;
+    int n_it = 20;
     bool stop_criterion_Q = false;
+    REAL norm_res;
     for (int i = 0; i < n_it; i++) {
         analysis->Assemble();
         analysis->Rhs() *= -1.0;
         analysis->Solve();
+        dx = analysis->Solution();
+        x += dx;
+        analysis->LoadSolution(x);
         analysis->AssembleResidual();
-        REAL norm_res = Norm(analysis->Rhs());
+        norm_res = Norm(analysis->Rhs());
         stop_criterion_Q = norm_res < tol;
         if (stop_criterion_Q) {
             std::cout << "Nonlinear process converged with residue norm = " << norm_res << std::endl;
+            std::cout << "Number of iterations = " << i << std::endl;
             break;
         }
+    }
+    
+    if (stop_criterion_Q == false) {
+        std::cout << "Nonlinear process not converged with residue norm = " << norm_res << std::endl;
     }
 
     PostProcess(analysis);
@@ -107,7 +118,7 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     TPorousElasticity * rock = new TPorousElasticity(rock_id);
     
     STATE nu = 0.203;
-    STATE kappa = 0.0024;
+    STATE kappa = 0.024;
     STATE pt_el = 5.835;
     STATE e_0 = 0.34;
     STATE p_0 = 0.0;
@@ -118,10 +129,27 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     rock->SetPoissonRatioConstant(nu);
     rock->SetInitialStress(s_0);
     
-    TPZTensor<STATE> epsilon, sigma;
-    rock->Sigma(epsilon, sigma);
-
-    sigma.Print(std::cout);
+//    TPZFNMatrix<36,STATE> De(6,6);
+//    TPZFNMatrix<6,STATE> epsilon_vec(6,1),sigma_vec(6,1);
+//    De.Zero();
+//    TPZTensor<STATE> epsilon, sigma;
+//    epsilon.XX() = -0.00005;
+//    epsilon.XY() = -0.000003;
+//    epsilon.XZ() = -0.000004;
+//    epsilon.YY() = -0.000005;
+//    epsilon.YZ() = -0.000006;
+//    epsilon.ZZ() = -0.00007;
+//
+//    rock->Sigma(epsilon, sigma);
+//    rock->De(epsilon, De);
+//    
+//    epsilon.CopyTo(epsilon_vec);
+//    De.Multiply(epsilon_vec, sigma_vec);
+//    
+//    
+//    sigma.Print(std::cout);
+//    sigma_vec.Print(std::cout);
+//    De.Print(std::cout);
     
     unsigned int bc_i_id, bc_e_id, bc_index, bc_id;
     
@@ -129,7 +157,7 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     bc_index = 5;
     TPZFMatrix<STATE> val1(2,2,0.), val2(2,1,0.);
     
-    val2(0,0) = 10.0*to_MPa;
+    val2(0,0) = 1.0*to_MPa;
     TPZBndCond * bc_i = rock->CreateBC(rock, bc_i_id, bc_index, val1, val2);
     
     bc_e_id = 3;

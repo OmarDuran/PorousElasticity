@@ -363,7 +363,7 @@ void TPorousElasticity::De(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De){
     De.PutVal(_ZZ_,_YY_, lambda);
     De.PutVal(_ZZ_,_ZZ_, lambda + 2. * G);
     
-    /// Nonlinear corrections
+    /// Nonlinear correction
     TPZManVector<STATE> nl(6);
     TPZFMatrix<STATE> De_nl(6,6,0.0);
     nl[0] = (2*dGdespv*epsilon.YY()*m_nu)/(1 - 2*m_nu) + (2*dGdespv*epsilon.ZZ()*m_nu)/(1 - 2*m_nu) +
@@ -459,8 +459,11 @@ void TPorousElasticity::Contribute(TPZMaterialData &data, REAL weight, TPZFMatri
     
     
     TPZFNMatrix<36,STATE> De(6,6,0.0);
+    De.Zero();
     this->De(epsilon,De);
     
+    TPZFNMatrix<4,STATE> Deriv(2, 2);
+    STATE val;
     for(int iu = 0; iu < n_phi_u; iu++ )
     {
         dvdx = grad_phi_u(0,iu);
@@ -486,8 +489,8 @@ void TPorousElasticity::Contribute(TPZMaterialData &data, REAL weight, TPZFMatri
         for(int ju = 0; ju < n_phi_u; ju++)
         {
             
-            dudx = grad_phi_u(0,ju);
-            dudy = grad_phi_u(1,ju);
+//            dudx = grad_phi_u(0,ju);
+//            dudy = grad_phi_u(1,ju);
         
             
             if (this->m_plane_stress == 1)
@@ -498,13 +501,47 @@ void TPorousElasticity::Contribute(TPZMaterialData &data, REAL weight, TPZFMatri
             {
                 
                 /* Plain Strain State */
-                ek(2*iu + first_u,2*ju + first_u)         += weight*    (De(0,0)*dudx*dvdx    + De(1,1)*(0.5*dudy)*dvdy);
+//                ek(2*iu + first_u,2*ju + first_u)         += weight*    (De(0,0)*dudx*dvdx    + De(1,1)*(0.5*dudy)*dvdy);
+//
+//                ek(2*iu + first_u,2*ju+1 + first_u)       += weight*    (De(0,3)*dudy*dvdx    + De(1,1)*(0.5*dudx)*dvdy);
+//
+//                ek(2*iu+1 + first_u,2*ju + first_u)       += weight*    (De(3,0)*dvdy*dudx    + De(1,1)*(0.5*dudy)*dvdx);
+//
+//                ek(2*iu+1 + first_u,2*ju+1 + first_u)     += weight*    (De(3,3)*dvdy*dudy    + De(1,1)*(0.5*dudx)*dvdx);
                 
-                ek(2*iu + first_u,2*ju+1 + first_u)       += weight*    (De(0,3)*dudy*dvdx    + De(1,1)*(0.5*dudx)*dvdy);
+                for (int ud = 0; ud < 2; ud++) {
+                    for (int vd = 0; vd < 2; vd++) {
+                        Deriv(vd, ud) = grad_phi_u(vd, iu) * grad_phi_u(ud, ju);
+                    }
+                }
                 
-                ek(2*iu+1 + first_u,2*ju + first_u)       += weight*    (De(3,0)*dvdy*dudx    + De(1,1)*(0.5*dudy)*dvdx);
+                val = 2. * De(_XX_, _XX_) * Deriv(0, 0);
+                val += De(_XX_, _XY_) * Deriv(0, 1);
+                val += 2. * De(_XY_, _XX_) * Deriv(1, 0);
+                val += De(_XY_, _XY_) * Deriv(1, 1);
+                val *= 0.5;
+                ek(2*iu + first_u,2*ju + first_u) += weight * val;
                 
-                ek(2*iu+1 + first_u,2*ju+1 + first_u)     += weight*    (De(3,3)*dvdy*dudy    + De(1,1)*(0.5*dudx)*dvdx);
+                val = De(_XX_, _XY_) * Deriv(0, 0);
+                val += 2. * De(_XX_, _YY_) * Deriv(0, 1);
+                val += De(_XY_, _XY_) * Deriv(1, 0);
+                val += 2. * De(_XY_, _YY_) * Deriv(1, 1);
+                val *= 0.5;
+                ek(2*iu + first_u,2*ju+1 + first_u) += weight * val;
+                
+                val = 2. * De(_XY_, _XX_) * Deriv(0, 0);
+                val += De(_XY_, _XY_) * Deriv(0, 1);
+                val += 2. * De(_YY_, _XX_) * Deriv(1, 0);
+                val += De(_YY_, _XY_) * Deriv(1, 1);
+                val *= 0.5;
+                ek(2*iu+1 + first_u,2*ju + first_u) += weight * val;
+                
+                val = De(_XY_, _XY_) * Deriv(0, 0);
+                val += 2. * De(_XY_, _YY_) * Deriv(0, 1);
+                val += De(_YY_, _XY_) * Deriv(1, 0);
+                val += 2. * De(_YY_, _YY_) * Deriv(1, 1);
+                val *= 0.5;
+                ek(2*iu+1 + first_u,2*ju+1 + first_u) += weight * val;
                 
             }
         }
