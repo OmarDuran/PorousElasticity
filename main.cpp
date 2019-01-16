@@ -12,6 +12,7 @@
 #include "TPZSSpStructMatrix.h"
 #include "pzskylstrmatrix.h"
 #include "TPZSkylineNSymStructMatrix.h"
+#include "TPZSpStructMatrix.h"
 #include "pzanalysis.h"
 //#include "pznonlinanalysis.h"
 
@@ -39,7 +40,7 @@ int main()
     TPZAnalysis * analysis = Analysis(cmesh);
     
     TPZFMatrix<STATE> x(analysis->Solution()), dx;
-    REAL tol = 1.0e-6;
+    REAL tol = 1.0e-10;
     int n_it = 10;
     bool stop_criterion_Q = false;
     REAL norm_res;
@@ -200,6 +201,7 @@ TPZAnalysis * Analysis(TPZCompMesh * cmesh){
 //    TPZSkylineStructMatrix matrix(cmesh);
     TPZSkylineNSymStructMatrix matrix(cmesh);
 //    TPZSymetricSpStructMatrix matrix(cmesh);
+//    TPZSpStructMatrix matrix(cmesh);
     TPZStepSolver<STATE> step;
     step.SetDirect(ELU);
     matrix.SetNumThreads(numofThreads);
