@@ -11,6 +11,7 @@
 #include "pzstepsolver.h"
 #include "TPZSSpStructMatrix.h"
 #include "pzskylstrmatrix.h"
+#include "TPZSkylineNSymStructMatrix.h"
 #include "pzanalysis.h"
 //#include "pznonlinanalysis.h"
 
@@ -30,7 +31,7 @@ void PostProcess(TPZAnalysis *an);
 
 int main() 
 {
-    int p_order = 1;
+    int p_order = 2;
     TPZGeoMesh * gmesh = ReadGeometry();
     PrintGeometry(gmesh);
     
@@ -38,9 +39,8 @@ int main()
     TPZAnalysis * analysis = Analysis(cmesh);
     
     TPZFMatrix<STATE> x(analysis->Solution()), dx;
-    x.Zero();
     REAL tol = 1.0e-6;
-    int n_it = 20;
+    int n_it = 10;
     bool stop_criterion_Q = false;
     REAL norm_res;
     for (int i = 0; i < n_it; i++) {
@@ -118,7 +118,7 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     TPorousElasticity * rock = new TPorousElasticity(rock_id);
     
     STATE nu = 0.203;
-    STATE kappa = 0.024;
+    STATE kappa = 0.0024;
     STATE pt_el = 5.835;
     STATE e_0 = 0.34;
     STATE p_0 = 0.0;
@@ -132,21 +132,22 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
 //    TPZFNMatrix<36,STATE> De(6,6);
 //    TPZFNMatrix<6,STATE> epsilon_vec(6,1),sigma_vec(6,1);
 //    De.Zero();
-//    TPZTensor<STATE> epsilon, sigma;
-//    epsilon.XX() = -0.00005;
-//    epsilon.XY() = -0.000003;
-//    epsilon.XZ() = -0.000004;
-//    epsilon.YY() = -0.000005;
-//    epsilon.YZ() = -0.000006;
-//    epsilon.ZZ() = -0.00007;
+//    TPZTensor<STATE> epsilon_0,epsilon, sigma;
+//    epsilon.XX() = -0.000113727;
+//    epsilon.XY() = 0.0;
+//    epsilon.XZ() = 0.0;
+//    epsilon.YY() = 0.000116224;
+//    epsilon.YZ() = 0.0;
+//    epsilon.ZZ() = 0.0;
 //
 //    rock->Sigma(epsilon, sigma);
-//    rock->De(epsilon, De);
-//    
+//    epsilon_0.Zero();
+//    rock->De(epsilon_0, De);
+//
 //    epsilon.CopyTo(epsilon_vec);
 //    De.Multiply(epsilon_vec, sigma_vec);
-//    
-//    
+//
+//
 //    sigma.Print(std::cout);
 //    sigma_vec.Print(std::cout);
 //    De.Print(std::cout);
@@ -157,7 +158,7 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     bc_index = 5;
     TPZFMatrix<STATE> val1(2,2,0.), val2(2,1,0.);
     
-    val2(0,0) = 1.0*to_MPa;
+    val2(0,0) = 10.0*to_MPa;
     TPZBndCond * bc_i = rock->CreateBC(rock, bc_i_id, bc_index, val1, val2);
     
     bc_e_id = 3;
@@ -196,10 +197,11 @@ TPZAnalysis * Analysis(TPZCompMesh * cmesh){
     
     int numofThreads = 0;
     TPZAnalysis * analysis = new TPZAnalysis(cmesh,true);
-    TPZSkylineStructMatrix matrix(cmesh);
+//    TPZSkylineStructMatrix matrix(cmesh);
+    TPZSkylineNSymStructMatrix matrix(cmesh);
 //    TPZSymetricSpStructMatrix matrix(cmesh);
     TPZStepSolver<STATE> step;
-    step.SetDirect(ELDLt);
+    step.SetDirect(ELU);
     matrix.SetNumThreads(numofThreads);
     analysis->SetStructuralMatrix(matrix);
     analysis->SetSolver(step);

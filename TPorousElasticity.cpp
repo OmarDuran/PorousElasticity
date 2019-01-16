@@ -364,23 +364,45 @@ void TPorousElasticity::De(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De){
     De.PutVal(_ZZ_,_ZZ_, lambda + 2. * G);
     
     /// Nonlinear correction
-    TPZManVector<STATE> nl(6);
     TPZFMatrix<STATE> De_nl(6,6,0.0);
-    nl[0] = (2*dGdespv*epsilon.YY()*m_nu)/(1 - 2*m_nu) + (2*dGdespv*epsilon.ZZ()*m_nu)/(1 - 2*m_nu) +
-    epsilon.XX()*(2*dGdespv + (2*dGdespv*m_nu)/(1 - 2*m_nu));
-    nl[1] = 2*dGdespv*epsilon.XY();
-    nl[2] = 2*dGdespv*epsilon.XZ();
-    nl[3] = (2*dGdespv*epsilon.XX()*m_nu)/(1 - 2*m_nu) +
-    (2*dGdespv*epsilon.ZZ()*m_nu)/(1 - 2*m_nu) +
-    epsilon.YY()*(2*dGdespv + (2*dGdespv*m_nu)/(1 - 2*m_nu));
-    nl[4] =  2*dGdespv*epsilon.YZ();
-    nl[5] = (2*dGdespv*epsilon.XX()*m_nu)/(1 - 2*m_nu) + (2*dGdespv*epsilon.YY()*m_nu)/(1 - 2*m_nu) + epsilon.ZZ()*(2*dGdespv + (2*dGdespv*m_nu)/(1 - 2*m_nu));
+    REAL constant = (2.0/(-1.0+2.0*m_nu));
     
-    for (int i =0 ; i < 6; i++) {
-        De_nl(i,0) = nl[i];
-        De_nl(i,3) = nl[i];
-        De_nl(i,5) = nl[i];
-    }
+    // Line 0
+    REAL l0_val = constant * ( epsilon.XX() * (m_nu - 1.0) - m_nu * (epsilon.YY() + epsilon.ZZ())) * dGdespv;
+    De_nl.PutVal(_XX_, _XX_, l0_val);
+    De_nl.PutVal(_XX_, _YY_, l0_val);
+    De_nl.PutVal(_XX_, _ZZ_, l0_val);
+    
+    // Line 1
+    REAL l1_val = 2.0 * dGdespv * epsilon.XY();
+    De_nl.PutVal(_XY_, _XX_, l1_val);
+    De_nl.PutVal(_XY_, _YY_, l1_val);
+    De_nl.PutVal(_XY_, _ZZ_, l1_val);
+    
+    // Line 2
+    REAL l2_val = 2.0 * dGdespv * epsilon.XZ();
+    De_nl.PutVal(_XZ_, _XX_, l2_val);
+    De_nl.PutVal(_XZ_, _YY_, l2_val);
+    De_nl.PutVal(_XZ_, _ZZ_, l2_val);
+    
+    // Line 3
+    REAL l3_val = constant * ( epsilon.YY() * (m_nu - 1.0) - m_nu * (epsilon.XX() + epsilon.ZZ())) * dGdespv;
+    De_nl.PutVal(_YY_, _XX_, l3_val);
+    De_nl.PutVal(_YY_, _YY_, l3_val);
+    De_nl.PutVal(_YY_, _ZZ_, l3_val);
+    
+    // Line 4
+    REAL l4_val = 2.0 * dGdespv * epsilon.YZ();
+    De_nl.PutVal(_YZ_, _XX_, l4_val);
+    De_nl.PutVal(_YZ_, _YY_, l4_val);
+    De_nl.PutVal(_YZ_, _ZZ_, l4_val);
+    
+    // Line 5
+    REAL l5_val = constant * ( epsilon.ZZ() * (m_nu - 1.0) - m_nu * (epsilon.XX() + epsilon.YY())) * dGdespv;
+    De_nl.PutVal(_ZZ_, _XX_, l5_val);
+    De_nl.PutVal(_ZZ_, _YY_, l5_val);
+    De_nl.PutVal(_ZZ_, _ZZ_, l5_val);
+    
     De+=De_nl;
 }
 
