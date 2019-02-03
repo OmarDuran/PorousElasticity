@@ -32,7 +32,7 @@ void PostProcess(TPZAnalysis *an);
 
 int main() 
 {
-    int p_order = 2;
+    int p_order = 1;
     TPZGeoMesh * gmesh = ReadGeometry();
     PrintGeometry(gmesh);
     
@@ -118,40 +118,46 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
 
     TPorousElasticity * rock = new TPorousElasticity(rock_id);
     
+    STATE mu = 12165.0;
     STATE nu = 0.203;
     STATE kappa = 0.0024;
     STATE pt_el = 5.835;
     STATE e_0 = 0.34;
     STATE p_0 = 0.0;
+    
     TPZManVector<STATE,6> s_0(6);
     
     rock->SetPlaneStrain();
     rock->SetPorousElasticity(kappa, pt_el, e_0, p_0);
-    rock->SetPoissonRatioConstant(nu);
+    rock->SetShearModulusConstant(mu);
+//    rock->SetPoissonRatioConstant(nu);
     rock->SetInitialStress(s_0);
     
-//    TPZFNMatrix<36,STATE> De(6,6);
-//    TPZFNMatrix<6,STATE> epsilon_vec(6,1),sigma_vec(6,1);
-//    De.Zero();
-//    TPZTensor<STATE> epsilon_0,epsilon, sigma;
-//    epsilon.XX() = -0.000113727;
-//    epsilon.XY() = 0.0;
-//    epsilon.XZ() = 0.0;
-//    epsilon.YY() = 0.000116224;
-//    epsilon.YZ() = 0.0;
-//    epsilon.ZZ() = 0.0;
-//
-//    rock->Sigma(epsilon, sigma);
-//    epsilon_0.Zero();
-//    rock->De(epsilon_0, De);
-//
-//    epsilon.CopyTo(epsilon_vec);
-//    De.Multiply(epsilon_vec, sigma_vec);
-//
-//
-//    sigma.Print(std::cout);
-//    sigma_vec.Print(std::cout);
-//    De.Print(std::cout);
+    TPZFNMatrix<36,STATE> De(6,6);
+    TPZFNMatrix<6,STATE> epsilon_vec(6,1),sigma_vec(6,1);
+    De.Zero();
+    TPZTensor<STATE> epsilon_0,epsilon, sigma;
+    epsilon.XX() = -0.0000113727;
+    epsilon.XY() = 0.0;
+    epsilon.XZ() = 0.0;
+    epsilon.YY() = 0.0000116224;
+    epsilon.YZ() = 0.0;
+    epsilon.ZZ() = 0.0;
+
+    rock->Sigma(epsilon, sigma);
+    epsilon_0.Zero();
+    rock->De(epsilon_0, De);
+
+    epsilon.CopyTo(epsilon_vec);
+    De.Multiply(epsilon_vec, sigma_vec);
+
+
+    sigma.Print(std::cout);
+    sigma_vec.Print(std::cout);
+    De.Print(std::cout);
+
+    rock->De(epsilon, De);
+    De.Print(std::cout);
     
     unsigned int bc_i_id, bc_e_id, bc_index, bc_id;
     
@@ -159,7 +165,7 @@ TPZCompMesh * DeformationMesh(TPZGeoMesh * gmesh, int p_order){
     bc_index = 5;
     TPZFMatrix<STATE> val1(2,2,0.), val2(2,1,0.);
     
-    val2(0,0) = 10.0*to_MPa;
+    val2(0,0) = 100.0*to_MPa;
     TPZBndCond * bc_i = rock->CreateBC(rock, bc_i_id, bc_index, val1, val2);
     
     bc_e_id = 3;
@@ -203,6 +209,7 @@ TPZAnalysis * Analysis(TPZCompMesh * cmesh){
 //    TPZSymetricSpStructMatrix matrix(cmesh);
 //    TPZSpStructMatrix matrix(cmesh);
     TPZStepSolver<STATE> step;
+//    step.SetDirect(ELDLt);
     step.SetDirect(ELU);
     matrix.SetNumThreads(numofThreads);
     analysis->SetStructuralMatrix(matrix);

@@ -332,11 +332,64 @@ void TPorousElasticity::ContributeBC(TPZMaterialData &data, REAL weight, TPZFMat
     }
 }
 
-void TPorousElasticity::De(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De){
+void TPorousElasticity::De_Shear_constant(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De){
+    
+    STATE lambda, nu, dnu_desp_vol;
+    this->Poisson(epsilon, nu, dnu_desp_vol);
+    lambda = (2.0*m_mu*nu)/(1.0-2.0*nu);
+    
+    // Line 0
+    De.PutVal(_XX_,_XX_, lambda + 2. * m_mu);
+    De.PutVal(_XX_,_YY_, lambda);
+    De.PutVal(_XX_,_ZZ_, lambda);
+    
+    // Line 1
+    De.PutVal(_XY_,_XY_, 2. * m_mu);
+    
+    // Line 2
+    De.PutVal(_XZ_,_XZ_, 2. * m_mu);
+    
+    // Line 3
+    De.PutVal(_YY_,_XX_, lambda);
+    De.PutVal(_YY_,_YY_, lambda + 2. * m_mu);
+    De.PutVal(_YY_,_ZZ_, lambda);
+    
+    // Line 4
+    De.PutVal(_YZ_,_YZ_, 2. * m_mu);
+    
+    // Line 5
+    De.PutVal(_ZZ_,_XX_, lambda);
+    De.PutVal(_ZZ_,_YY_, lambda);
+    De.PutVal(_ZZ_,_ZZ_, lambda + 2. * m_mu);
+    
+    /// Nonlinear correction
+    TPZFMatrix<STATE> De_nl(6,6,0.0);
+    REAL denominator = 2.0 * m_mu * ( epsilon.XX() + epsilon.YY() + epsilon.ZZ() ) * dnu_desp_vol;
+    REAL constant = ((denominator)/(1.0-2.0*nu))*(1.0/(1.0-2.0*nu));
+    
+    // Line 0
+    De_nl.PutVal(_XX_, _XX_, 1.0);
+    De_nl.PutVal(_XX_, _YY_, 1.0);
+    De_nl.PutVal(_XX_, _ZZ_, 1.0);
+    
+    // Line 3
+    De_nl.PutVal(_YY_, _XX_, 1.0);
+    De_nl.PutVal(_YY_, _YY_, 1.0);
+    De_nl.PutVal(_YY_, _ZZ_, 1.0);
+    
+    // Line 5
+    De_nl.PutVal(_ZZ_, _XX_, 1.0);
+    De_nl.PutVal(_ZZ_, _YY_, 1.0);
+    De_nl.PutVal(_ZZ_, _ZZ_, 1.0);
+    
+    De+=constant*De_nl;
+    
+}
 
+void TPorousElasticity::De_Poisson_constant(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De){
+    
     STATE lambda, G, dGdespv;
     this->G(epsilon,G, dGdespv);
-//    G = (3*(((1 + m_e_0)*(m_p_0 + m_pt_el))/m_kappa)*(1 - 2*m_nu))/(2*(1 + m_nu));
     lambda = (2.0*G*m_nu)/(1.0-2.0*m_nu);
     
     // Line 0
@@ -404,6 +457,17 @@ void TPorousElasticity::De(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De){
     De_nl.PutVal(_ZZ_, _ZZ_, l5_val);
     
     De+=De_nl;
+    
+}
+
+void TPorousElasticity::De(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De){
+
+    if (m_is_G_constant_Q) {
+        De_Shear_constant(epsilon, De);
+    }else{
+        De_Poisson_constant(epsilon, De);
+    }
+    
 }
 
 void TPorousElasticity::G(TPZTensor<STATE> &epsilon, STATE & G, STATE & dGdesp_vol){
@@ -421,17 +485,35 @@ void TPorousElasticity::G(TPZTensor<STATE> &epsilon, STATE & G, STATE & dGdesp_v
      m_kappa*(1 + m_nu));
 }
 
+void TPorousElasticity::Poisson(TPZTensor<STATE> &epsilon, STATE & nu, STATE & dnu_desp_vol){
+    
+    STATE epsv = epsilon.I1();
+    nu = -1 + (9*(1 + epsv)*(1 + m_e_0)*(m_pt_el + m_p_0))/(6*(1 + epsv)*(1 + m_e_0)*(m_pt_el + m_p_0) +
+                                                            2*exp((epsv*(1 + m_e_0))/m_kappa)*m_kappa*m_mu);
+    
+    dnu_desp_vol = (-9*exp((epsv*(1 + m_e_0))/ m_kappa)*(1 + m_e_0)*(1 + epsv + m_e_0 + epsv*m_e_0 - m_kappa)*
+                    (m_pt_el + m_p_0)* m_mu)/(2.*pow(3*(1 + epsv)*(1 + m_e_0)*(m_pt_el + m_p_0) + exp((epsv*(1 + m_e_0))/                m_kappa)*m_kappa*m_mu,2));
+}
+
 void TPorousElasticity::Sigma(TPZTensor<STATE> & epsilon, TPZTensor<STATE> & sigma){
  
     STATE trace = epsilon.I1();
-    STATE lambda, G, dGdesp_vol;
-    this->G(epsilon,G, dGdesp_vol);
-//    G = (3*(((1 + m_e_0)*(m_p_0 + m_pt_el))/m_kappa)*(1 - 2*m_nu))/(2*(1 + m_nu));
-    lambda = (2.0*G*m_nu)/(1.0-2.0*m_nu);
     
-    sigma.Identity();
-    sigma.Multiply(trace, lambda);
-    sigma.Add(epsilon, 2. * G);
+    if (m_is_G_constant_Q) {
+        STATE lambda, nu, dnu_desp_vol;
+        this->Poisson(epsilon,nu, dnu_desp_vol);
+        lambda = (2.0*m_mu*nu)/(1.0-2.0*nu);
+        sigma.Identity();
+        sigma.Multiply(trace, lambda);
+        sigma.Add(epsilon, 2. * m_mu);
+    }else{
+        STATE lambda, G, dGdesp_vol;
+        this->G(epsilon,G, dGdesp_vol);
+        lambda = (2.0*G*m_nu)/(1.0-2.0*m_nu);
+        sigma.Identity();
+        sigma.Multiply(trace, lambda);
+        sigma.Add(epsilon, 2. * G);
+    }
     
 }
 
@@ -745,17 +827,9 @@ void TPorousElasticity::ContributeBC(TPZMaterialData &data, REAL weight, TPZFMat
 int TPorousElasticity::VariableIndex(const std::string &name){
     //    Elasticity Variables
     if(!strcmp("Displacement",name.c_str()))                return    1;
-    if(!strcmp("SolidPressure",name.c_str()))                return    2;
-    if(!strcmp("SigmaX",name.c_str()))                        return    3;
-    if(!strcmp("SigmaY",name.c_str()))                        return    4;
-    if(!strcmp("SigmaZ",name.c_str()))                        return    5;
-    if(!strcmp("TauXY",name.c_str()))                        return    6;
-    if(!strcmp("EpsX",name.c_str()))                        return    7;
-    if(!strcmp("EpsY",name.c_str()))                        return    8;
-    if(!strcmp("EpsZ",name.c_str()))                        return    9;
-    if(!strcmp("EpsXY",name.c_str()))                        return    10;
-    //    PZError << "TPZMatElasticity2D::VariableIndex Error\n";
-    
+    if(!strcmp("SigmaX",name.c_str()))                        return    2;
+    if(!strcmp("SigmaY",name.c_str()))                        return    3;
+    if(!strcmp("SigmaZ",name.c_str()))                        return    4;
     return TPZMaterial::VariableIndex(name);
 }
 
@@ -764,12 +838,6 @@ int TPorousElasticity::NSolutionVariables(int var){
     if(var == 2)    return 1;
     if(var == 3)    return 1;
     if(var == 4)    return 1;
-    if(var == 5)    return 1;
-    if(var == 6)    return 1;
-    if(var == 7)    return 1;
-    if(var == 8)    return 1;
-    if(var == 9)    return 1;
-    if(var == 10)    return 1;
     
     return TPZMaterial::NSolutionVariables(var);
 }
@@ -777,134 +845,74 @@ int TPorousElasticity::NSolutionVariables(int var){
 void TPorousElasticity::Solution(TPZMaterialData &data, int var, TPZVec<STATE> &Solout){
     Solout.Resize(this->NSolutionVariables(var));
     
-    TPZManVector<STATE,3> SolU, SolP;
-    TPZFNMatrix <6,STATE> DSolU, DSolP;
-    TPZFNMatrix <9> axesU, axesP;
     
-    TPZVec<REAL> ptx(3);
-    TPZVec<STATE> solExata(3);
-    TPZFMatrix<STATE> flux(5,1);
+    // Getting weight functions
+    TPZManVector<REAL,3> u = data.sol[0];
+    TPZFMatrix<REAL>  & phi_u     =  data.phi;
+    TPZFMatrix<REAL>  & dphi_u    =  data.dphix;
+    int n_phi_u = phi_u.Rows();
+    int first_u  = 0;
+    
+    TPZFNMatrix<40,REAL> grad_phi_u(3,n_phi_u);
+    TPZAxesTools<REAL>::Axes2XYZ(data.dphix, grad_phi_u, data.axes);
+    TPZFMatrix<STATE> dsol_u    = data.dsol[0];
+    
+    REAL dvdx,dvdy,dudx,dudy;
+    REAL duxdx,duxdy,duydx,duydy;
+    
+    //  Gradient for ux
+    duxdx = dsol_u(0,0)*data.axes(0,0)+dsol_u(1,0)*data.axes(1,0); // dux/dx
+    duxdy = dsol_u(0,0)*data.axes(0,1)+dsol_u(1,0)*data.axes(1,1); // dux/dy
+    
+    //  Gradient for uy
+    duydx = dsol_u(0,1)*data.axes(0,0)+dsol_u(1,1)*data.axes(1,0); // duy/dx
+    duydy = dsol_u(0,1)*data.axes(0,1)+dsol_u(1,1)*data.axes(1,1); // duy/dy
+    
+    TPZTensor<STATE> epsilon;
+    TPZTensor<STATE> sigma;
+    
+    TPZFNMatrix<9,STATE> eps, grad_u(3,3,0.0),grad_u_t;
+    grad_u(0,0) = duxdx;
+    grad_u(0,1) = duxdy;
+    grad_u(1,0) = duydx;
+    grad_u(1,1) = duydy;
+    
+    grad_u.Transpose(&grad_u_t);
+    eps = 0.5*(grad_u + grad_u_t);
+    
+    epsilon.XX() = eps(0,0);
+    epsilon.XY() = eps(0,1);
+    epsilon.YY() = eps(1,1);
+    Sigma(epsilon, sigma);
     
     if (data.sol.size() != 1) {
         DebugStop();
     }
     
-    SolU    =    data.sol[0];
-    DSolU    =    data.dsol[0];
-    axesU    =    data.axes;
-    
-    
     //    Displacements
     if(var == 1 || var == 0){
-        Solout[0] = SolU[0];
-        Solout[1] = SolU[1];
+        Solout[0] = u[0];
+        Solout[1] = u[1];
         if(var==1) Solout[2] = 0.0;
         return;
     }
     
-    m_mu = (3*(((1 + m_e_0)*(m_p_0 + m_pt_el))/m_kappa)*(1 - 2*m_nu))/(2*(1 + m_nu));
-    STATE m_lambda = (2.0*m_mu*m_nu)/(1.0-2.0*m_nu);
-    
-    STATE s0_xx = m_sigma_0[0];
-    STATE s0_yy = m_sigma_0[1];
-    STATE s0_zz = m_sigma_0[2];
-    STATE s0_xy = m_sigma_0[5];
-    
-    REAL epsx;
-    REAL epsy;
-    REAL epsxy;
-    REAL SigX;
-    REAL SigY;
-    REAL SigZ;
-    REAL Tau, DSolxy[2][2];
-    REAL divu;
-    
-    DSolxy[0][0] = DSolU(0,0)*axesU(0,0)+DSolU(1,0)*axesU(1,0); // dUx/dx
-    DSolxy[1][0] = DSolU(0,0)*axesU(0,1)+DSolU(1,0)*axesU(1,1); // dUx/dy
-    
-    DSolxy[0][1] = DSolU(0,1)*axesU(0,0)+DSolU(1,1)*axesU(1,0); // dUy/dx
-    DSolxy[1][1] = DSolU(0,1)*axesU(0,1)+DSolU(1,1)*axesU(1,1); // dUy/dy
-    
-    divu = DSolxy[0][0]+DSolxy[1][1]+0.0;
-    
-    epsx = DSolxy[0][0];// du/dx
-    epsy = DSolxy[1][1];// dv/dy
-    epsxy = 0.5*(DSolxy[1][0]+DSolxy[0][1]);
-    REAL C11 = 4*(m_mu)*(m_lambda+m_mu)/(m_lambda+2*m_mu);
-    REAL C22 = 2*(m_mu)*(m_lambda)/(m_lambda+2*m_mu);
-    
-    if (this->m_plane_stress)
-    {
-        SigX = C11*epsx+C22*epsy;
-        SigY = C11*epsy+C22*epsx;
-        SigZ = 0.0;
-        Tau = 2.0*m_mu*epsxy;
-    }
-    else
-    {
-        SigX = ((m_lambda + 2*m_mu)*(epsx) + (m_lambda)*epsy);
-        SigY = ((m_lambda + 2*m_mu)*(epsy) + (m_lambda)*epsx);
-        SigZ = m_lambda*divu;
-        Tau = 2.0*m_mu*epsxy;
-    }
-    
-    
-    //    Hydrostatic stress
     if(var == 2)
     {
-        Solout[0] = SigX+SigY+SigZ;
+        Solout[0] = sigma.XX();
         return;
     }
     
-    //    Effective Stress x-direction
     if(var == 3) {
-        Solout[0] = SigX + s0_xx;
+        Solout[0] = sigma.YY();
         return;
     }
     
-    //    Effective Stress y-direction
     if(var == 4) {
-        Solout[0] = SigY + s0_yy;
+        Solout[0] = sigma.ZZ();
         return;
     }
-    
-    //    Effective Stress y-direction
-    if(var == 5) {
-        Solout[0] = SigZ + s0_zz;
-        return;
-    }
-    
-    //    Shear Stress
-    if(var == 6) {
-        Solout[0] = Tau + s0_xy;
-        return;
-    }
-    
-    // epsx
-    if (var == 7) {
-        Solout[0] = epsx;
-    }
-    
-    // epsy
-    if (var == 8) {
-        Solout[0] = epsy;
-    }
-    
-    // epsz
-    if (var == 9) {
-        if (m_plane_stress) {
-            Solout[0] = -m_nu*(epsx+epsy);
-        }
-        else
-        {
-            Solout[0] = 0.;
-        }
-    }
-    
-    // epsxy
-    if (var == 10) {
-        Solout[0] = epsxy;
-    }
+
 }
 
 

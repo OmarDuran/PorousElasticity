@@ -131,7 +131,13 @@ public:
     
     void De(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De);
     
-    void G(TPZTensor<STATE> &epsilon, STATE & G, STATE & dGdesp_vol);
+    void De_Shear_constant(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De);
+    
+    void De_Poisson_constant(TPZTensor<STATE> &epsilon, TPZFMatrix<STATE> & De);
+    
+    void G(TPZTensor<STATE> &epsilon, STATE & G, STATE & dG_desp_vol);
+    
+    void Poisson(TPZTensor<STATE> &epsilon, STATE & nu, STATE & dnu_desp_vol);
     
     void Sigma(TPZTensor<STATE> &epsilon, TPZTensor<STATE> &sigma);
     
